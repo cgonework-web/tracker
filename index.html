@@ -65,8 +65,8 @@ button{cursor:pointer}
 .btn{height:50px;border-radius:14px;border:0;padding:0 18px;font-weight:800;font-size:16px;background:var(--ink);color:var(--bg);flex:none}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .chip{height:40px;padding:0 14px;border-radius:12px;border:0;background:var(--bg);font-weight:700;font-size:15px;box-shadow:inset 0 0 0 1.5px var(--line)}
-.chip.x{display:inline-flex;align-items:center;gap:8px;background:color-mix(in srgb,var(--swim) 14%,var(--bg));box-shadow:none}
-.meter{height:10px;border-radius:99px;background:color-mix(in srgb,var(--c) 18%,transparent);overflow:hidden;margin-top:14px}
+.chip.x{display:inline-flex;align-items:center;gap:8px;background:var(--line);background:color-mix(in srgb,var(--swim) 14%,var(--bg));box-shadow:none}
+.meter{height:10px;border-radius:99px;background:var(--line);background:color-mix(in srgb,var(--c) 18%,transparent);overflow:hidden;margin-top:14px}
 .meter i{display:block;height:100%;background:var(--c);border-radius:99px;transition:width .6s}
 .note{font-size:14px;color:var(--mut);margin:8px 0 0}
 .smoke{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:stretch}
@@ -79,7 +79,7 @@ button{cursor:pointer}
 .side .count span{font-size:12px;color:var(--mut)}
 .side button{border:0;border-radius:16px;background:var(--bg);font-weight:700;font-size:15px;box-shadow:inset 0 0 0 1.5px var(--line)}
 .times{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.times span{font-size:13px;font-weight:600;padding:4px 9px;border-radius:8px;background:color-mix(in srgb,var(--smoke) 18%,var(--bg));white-space:nowrap}
+.times span{font-size:13px;font-weight:600;padding:4px 9px;border-radius:8px;background:var(--line);background:color-mix(in srgb,var(--smoke) 18%,var(--bg));white-space:nowrap}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border-radius:14px;padding:4px;margin-bottom:12px}
 .seg button{height:40px;border:0;border-radius:11px;background:transparent;font-weight:700}
 .seg button.on{background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
@@ -104,7 +104,7 @@ button{cursor:pointer}
 .card .sub{font-size:13px;color:var(--mut);margin:0 0 10px}
 .grid{display:grid;gap:3px;align-items:center}
 .grid .rl{font-size:12px;font-weight:700;color:var(--mut);white-space:nowrap;padding-right:6px}
-.grid .c{display:block;aspect-ratio:1;max-height:24px;border-radius:4px;background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.grid .c{display:block;aspect-ratio:1;max-height:24px;border-radius:4px;background:var(--line);background:color-mix(in srgb,var(--ink) 8%,transparent)}
 .grid .c.on{background:var(--c)}
 .grid .c.fut{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 .grid .dl{font-size:11px;color:var(--mut);text-align:center;font-weight:600}
@@ -181,7 +181,7 @@ let tab='today',cur=todayK(),period='week',pOff=0,undo=null,syncState='sync',era
 
 /* ---------- persistence + sync ---------- */
 const dirty=new Set();let dirtySet=false,col=null,flushing=false,timer=null;
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){return false}}
 function queue(ms){if(col)setSync('saving');clearTimeout(timer);timer=setTimeout(flush,ms||400)}
 addEventListener('pagehide',()=>{clearTimeout(timer);flush()});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){clearTimeout(timer);flush()}});
@@ -228,21 +228,23 @@ async function pull(){
 }
 function setSync(s){syncState=s;const d=$('#sdot');if(d){d.className='dot '+(s==='ok'||s==='local'?'ok':s==='err'?'err':'');d.title=syncText()}const st=$('#stext');if(st)st.textContent=syncText()}
 function syncText(){return syncState==='ok'?'Saved to your Claude account':syncState==='saving'?'Saving…':syncState==='err'?'Not saved yet — check internet, will retry':syncState==='local'?'Saved on this phone':'Connecting…'}
+try{localStorage.setItem('dt.test','1');localStorage.removeItem('dt.test')}catch(e){setTimeout(()=>toast('Storage is blocked: data will not be kept',false),500)}
 setSync('local');try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;if(tab==='today'&&cur<todayK()&&lastToday!==todayK()){cur=todayK()}lastToday=todayK();render();pull()});
 let lastToday=todayK();
+function rollover(){const t=todayK();if(t===lastToday)return false;if(cur===lastToday)cur=t;lastToday=t;return true}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;rollover();render();pull()});
 
 /* ---------- edits ---------- */
 function edit(k,fn,msg){
  const had=has(k),prev=had?JSON.parse(JSON.stringify(S.days[k])):null;
  const d=JSON.parse(JSON.stringify(day(k)));fn(d);d.u=Date.now();S.days[k]=d;
- persist();dirty.add(k.slice(0,7));queue();undo={k,prev};render();toast(msg,true);
+ const saved=persist();dirty.add(k.slice(0,7));queue();undo={k,prev};render();if(saved)toast(msg,true);else toast('Not saved: phone storage full or blocked',false);
 }
 function doUndo(){if(!undo)return;const d=undo.prev?{...undo.prev}:blank();d.u=Date.now();S.days[undo.k]=d;persist();dirty.add(undo.k.slice(0,7));queue();undo=null;render();toast('Undone',false)}
 let tT=null;
 function toast(msg,canUndo){$('#tmsg').textContent=msg;$('#tundo').style.display=canUndo?'':'none';const t=$('#toast');t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),3200)}
 function saveSteps(){const el=$('#stepsIn');if(!el)return;const n=parseInt(String(el.value).replace(/\D/g,''),10)||0;if(n===day(cur).steps)return;if(n>200000){toast('That looks too high',false);return}edit(cur,d=>{d.steps=n},fmt(n)+' steps saved')}
-function setSetting(key,val){S.settings[key]=val;S.settings.su=Date.now();dirtySet=true;persist();queue();toast('Saved',false)}
+function setSetting(key,val){S.settings[key]=val;S.settings.su=Date.now();dirtySet=true;const ok=persist();queue();toast(ok?'Saved':'Not saved: phone storage full or blocked',false)}
 
 /* ---------- charts ---------- */
 const figs=new Map();const ro=new ResizeObserver(es=>{for(const e of es){const f=figs.get(e.target);if(f)f()}});
@@ -439,6 +441,7 @@ function render(){
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b||b.disabled)return;
+ if(rollover())render();
  const a=b.dataset.act,v=b.dataset.v,k=cur;
  if(a!=='erase')eraseArm=false;
  switch(a){
@@ -466,7 +469,7 @@ document.addEventListener('click',e=>{
   case 'erase':if(!eraseArm){eraseArm=true;render()}else{eraseArm=false;const now=Date.now();for(const x in S.days)dirty.add(x.slice(0,7));S.days={};S.settings.erasedAt=now;S.settings.su=now;dirtySet=true;persist();queue();render();toast('All data erased',false)}break;
  }
 });
-document.addEventListener('submit',e=>{e.preventDefault();
+document.addEventListener('submit',e=>{e.preventDefault();if(rollover()&&e.target.id==='swimForm'){render();toast('New day started. Log again',false);return}
  if(e.target.id==='stepsForm'){saveSteps();document.activeElement&&document.activeElement.blur()}
  if(e.target.id==='swimForm'){const n=parseInt($('#swimIn').value,10);if(n>0&&n<=600)edit(cur,d=>{d.swim.push(n)},'Swim · '+n+' min added');else toast('Enter minutes between 1 and 600',false)}
 });
@@ -479,7 +482,7 @@ document.addEventListener('change',e=>{
   if(!Number.isFinite(n)||n<lim[0]||n>lim[1]){toast('Enter a number from '+lim[0]+' to '+fmt(lim[1]),false);el.value=S.settings[key];return}
   setSetting(key,key==='cigPrice'?Math.round(n*100)/100:Math.round(n))}
 });
-setInterval(()=>{const f=document.activeElement;if(tab==='today'&&cur===todayK()&&document.visibilityState==='visible'&&!(f&&/INPUT|TEXTAREA/.test(f.tagName)))render()},60000);
+setInterval(()=>{const f=document.activeElement,typing=f&&/INPUT|TEXTAREA/.test(f.tagName);if(rollover()){if(!typing)render();return}if(tab==='today'&&cur===todayK()&&document.visibilityState==='visible'&&!typing)render()},30000);
 render();
 }
 </script>
